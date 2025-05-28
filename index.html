@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Curro Connect</title>
+  <style>
+    body {
+      font-family: 'Comic Sans MS', cursive, sans-serif;
+      background: linear-gradient(to bottom, #5d9fff, #b8dcff);
+      color: #fff;
+      margin: 0;
+      padding: 0;
+    }
+    header {
+      background-color: #004ba0;
+      padding: 20px;
+      text-align: center;
+      font-size: 2em;
+      text-shadow: 2px 2px #000;
+    }
+    nav {
+      background-color: #00336e;
+      padding: 10px;
+      text-align: center;
+    }
+    nav span {
+      margin-right: 15px;
+    }
+    nav button {
+      padding: 5px 10px;
+      background-color: #0077cc;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+    }
+    #auth, #post-form {
+      padding: 20px;
+      text-align: center;
+    }
+    input, textarea {
+      display: block;
+      margin: 10px auto;
+      padding: 10px;
+      width: 90%;
+      max-width: 400px;
+      border: none;
+      border-radius: 8px;
+    }
+    button {
+      background-color: #0077cc;
+      color: white;
+      padding: 10px 20px;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: bold;
+    }
+    main {
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    .card {
+      background-color: rgba(0, 0, 0, 0.3);
+      padding: 15px;
+      border-radius: 15px;
+      width: 90%;
+      max-width: 500px;
+      margin-bottom: 20px;
+      box-shadow: 4px 4px 10px rgba(0, 0, 0, 0.5);
+      position: relative;
+    }
+    .card small {
+      display: block;
+      margin-top: 10px;
+      font-size: 0.8em;
+      color: #ddd;
+    }
+    .delete-btn {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      background-color: #ff4444;
+    }
+    footer {
+      background-color: #00264d;
+      text-align: center;
+      padding: 15px;
+    }
+  </style>
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-app.js";
+    import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-auth.js";
+    import { getFirestore, collection, addDoc, query, orderBy, onSnapshot, doc, deleteDoc } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyBpwLzE86W1ZabkkA09YVohEcWuXhVqTlI",
+      authDomain: "curro-connect.firebaseapp.com",
+      projectId: "curro-connect",
+      storageBucket: "curro-connect.appspot.com",
+      messagingSenderId: "553328858931",
+      appId: "1:553328858931:web:d0c1a4225cda01868ad046"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db = getFirestore(app);
+
+    const authSection = document.getElementById('auth');
+    const postFormSection = document.getElementById('post-form');
+    const welcomeMsg = document.getElementById('welcome-msg');
+    const logoutBtn = document.getElementById('logout-btn');
+    const postFeed = document.getElementById('post-feed');
+
+    function showMessage(msg) {
+      alert(msg);
+    }
+
+    // Register user with email & password (using username + @curroconnect.com)
+    window.register = async () => {
+      const username = document.getElementById('username').value.trim();
+      const password = document.getElementById('password').value;
+
+      if (!username || !password) {
+        showMessage("Please enter username and password");
+        return;
+      }
+
+      const email = username + "@curroconnect.com";
+
+      try {
+        await createUserWithEmailAndPassword(auth, email, password);
+        showMessage("Account created! You can now log in.");
+      } catch (error) {
+        showMessage(error.message);
+      }
+    };
+
+    // Login user
+    window.login = async () => {
+      const username = document.getElementById('username').value.trim();
+      const password = document.getElementById('password').value;
+      if (!username || !password) {
+        showMessage("Please enter username and password");
+        return;
+      }
+      const email = username + "@curroconnect.com";
+
+      try {
+        await signInWithEmailAndPassword(auth, email, password);
+      } catch (error) {
+        showMessage(error.message);
+      }
+    };
+
+    // Logout user
+    window.logout = () => {
+      signOut(auth);
+    };
+
+    // Create a post in Firestore
+    window.createPost = async () => {
+      const textArea = document.getElementById('post-message');
+      const text = textArea.value.trim();
+      if (!text) {
+        showMessage("Post cannot be empty");
+        return;
+      }
+      const user = auth.currentUser;
+      if (!user) {
+        showMessage("You must be logged in to post");
+        return;
+      }
+
+      try {
+        await addDoc(collection(db, "posts"), {
+          text,
+          author: user.email.split("@")[0],
+          timestamp: Date.now()
+        });
+        textArea.value = '';
+      } catch (error) {
+        showMessage("Failed to post: " + error.message);
+      }
+    };
+
+    // Render posts
+    function renderPosts(posts) {
+      postFeed.innerHTML = '';
+      posts.forEach(post => {
+        const card = document.createElement('div');
+        card.className = 'card';
+
+        card.innerHTML = `<p>${post.text}</p><small>Posted by ${post.author}</small>`;
+
+        if (auth.currentUser && auth.currentUser.email.split("@")[0] === post.author) {
+          const delBtn = document.createElement('button');
+          delBtn.textContent = 'Delete';
+          delBtn.className = 'delete-btn';
+          delBtn.onclick = async () => {
+            await deleteDoc(doc(db, "posts", post.id));
+          };
+          card.appendChild(delBtn);
+        }
+
+        postFeed.appendChild(card);
+      });
+    }
+
+    // Listen to auth state changes
+    onAuthStateChanged(auth, user => {
+      if (user) {
+        authSection.style.display = 'none';
+        postFormSection.style.display = 'block';
+        logoutBtn.style.display = 'inline-block';
+        welcomeMsg.textContent = `Logged in as: ${user.email.split("@")[0]}`;
+
+        // Real-time listener for posts ordered by timestamp desc
+        const q = query(collection(db, "posts"), orderBy("timestamp", "desc"));
+        onSnapshot(q, snapshot => {
+          const posts = [];
+          snapshot.forEach(doc => posts.push({ id: doc.id, ...doc.data() }));
+          renderPosts(posts);
+        });
+
+      } else {
+        authSection.style.display = 'block';
+        postFormSection.style.display = 'none';
+        logoutBtn.style.display = 'none';
+        welcomeMsg.textContent = '';
+        postFeed.innerHTML = '';
+      }
+    });
+  </script>
+</head>
+<body>
+  <header>Curro Connect</header>
+  <nav>
+    <span id="welcome-msg"></span>
+    <button id="logout-btn" onclick="logout()" style="display:none;">Logout</button>
+  </nav>
+
+  <section id="auth">
+    <h2>Register / Login</h2>
+    <input id="username" placeholder="Username" />
+    <input id="password" type="password" placeholder="Password" />
+    <button onclick="register()">Register</button>
+    <button onclick="login()">Login</button>
+  </section>
+
+  <section id="post-form" style="display:none;">
+    <h2>Create a Post</h2>
+    <textarea id="post-message" rows="4" placeholder="What's on your mind?"></textarea>
+    <button onclick="createPost()">Post</button>
+  </section>
+
+  <main id="post-feed"></main>
+
+  <footer>© 2025 Curro Connect</footer>
+</body>
+</html>
